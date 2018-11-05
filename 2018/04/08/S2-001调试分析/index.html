@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+  <!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  
+  <title>S2-001调试分析 - sn00py</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  
+  <meta name="keywords" content=漏洞分析>
+  
+  
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1.02">
+  
+  
+    <link rel="alternate" href="/atom.xml " title="sn00py" type="application/atom+xml">
+  
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+  <body>
+    <div class="container">
+      <header class="header">
+  <div class="blog-title">
+    <a href="/" class="logo">sn00py</a>
+    <div class="subtitle"></div>
+  </div>
+  <nav class="navbar">
+    <ul class="menu">
+      
+        <li class="menu-item">
+          <a href="/" class="menu-item-link">Home</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/archives" class="menu-item-link">Archives</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/about" class="menu-item-link">About</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/friends/" class="menu-item-link">Frinds</a>
+        </li>
+      
+    </ul>
+  </nav>
+</header>
+<article class="post">
+  <div class="post-title">
+    <h1 class="article-title">S2-001调试分析</h1>
+  </div>
+   <div class="post-meta">
+    <span class="post-time">2018-04-08</span>
+  </div>
+  <div class="post-content">
+    <h2 id="0x00-代码"><a href="#0x00-代码" class="headerlink" title="0x00 代码"></a>0x00 代码</h2><p>struts.xml:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="php"><span class="meta">&lt;?</span>xml version=<span class="string">"1.0"</span> encoding=<span class="string">"UTF-8"</span><span class="meta">?&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">&lt;!DOCTYPE struts PUBLIC</span></span><br><span class="line"><span class="meta">        "-//Apache Software Foundation//DTD Struts Configuration 2.0//EN"</span></span><br><span class="line"><span class="meta">        "http://struts.apache.org/dtds/struts-2.0.dtd"&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">struts</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">package</span> <span class="attr">name</span>=<span class="string">"S2-001"</span> <span class="attr">extends</span>=<span class="string">"struts-default"</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">action</span> <span class="attr">name</span>=<span class="string">"login"</span> <span class="attr">class</span>=<span class="string">"com.demo.action.loginAction"</span> <span class="attr">method</span>=<span class="string">"execute"</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">interceptor-ref</span> <span class="attr">name</span>=<span class="string">"params"</span>/&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">result</span> <span class="attr">name</span>=<span class="string">"success"</span>&gt;</span>/welcome.jsp<span class="tag">&lt;/<span class="name">result</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">result</span> <span class="attr">name</span>=<span class="string">"error"</span>&gt;</span>/index.jsp<span class="tag">&lt;/<span class="name">result</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">action</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">package</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">struts</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<p>loginAction.java:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.demo.action;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">loginAction</span> </span>&#123;</span><br><span class="line">    <span class="keyword">private</span> String userName;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setUserName</span><span class="params">(String userName)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.userName = userName;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">getUserName</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> userName;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">execute</span><span class="params">()</span></span>&#123;</span><br><span class="line">        <span class="keyword">if</span>(<span class="keyword">this</span>.userName.equals(<span class="string">"admin"</span>))&#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">"success"</span>;</span><br><span class="line">        &#125;<span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="string">"error"</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>index.jsp:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">&lt;%@ taglib prefix=<span class="string">"s"</span> uri=<span class="string">"/struts-tags"</span> %&gt;</span><br><span class="line">&lt;%@ page contentType=<span class="string">"text/html;charset=UTF-8"</span> language=<span class="string">"java"</span> %&gt;</span><br><span class="line">&lt;html&gt;</span><br><span class="line">  &lt;head&gt;</span><br><span class="line">    &lt;title&gt;Login&lt;/title&gt;</span><br><span class="line">  &lt;/head&gt;</span><br><span class="line">  &lt;body&gt;</span><br><span class="line">    &lt;h2&gt;S2-001 Demo&lt;/h2&gt;</span><br><span class="line">    &lt;s:form action=<span class="string">"login"</span>&gt;</span><br><span class="line">        &lt;s:textfield name=<span class="string">"userName"</span> label=<span class="string">"username"</span>/&gt;</span><br><span class="line">        &lt;s:submit/&gt;</span><br><span class="line">    &lt;/s:form&gt;</span><br><span class="line">  &lt;/body&gt;</span><br><span class="line">&lt;/html&gt;</span><br></pre></td></tr></table></figure>
+<p>welcome.jsp:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&lt;%@ page contentType=<span class="string">"text/html;charset=UTF-8"</span> language=<span class="string">"java"</span> %&gt;</span><br><span class="line">&lt;%@ taglib prefix=<span class="string">"s"</span> uri=<span class="string">"/struts-tags"</span> %&gt;</span><br><span class="line">&lt;html&gt;</span><br><span class="line">&lt;head&gt;</span><br><span class="line">    &lt;title&gt;welcome&lt;/title&gt;</span><br><span class="line">&lt;/head&gt;</span><br><span class="line">&lt;body&gt;</span><br><span class="line">    Hello,&lt;s:property value=<span class="string">"userName"</span>/&gt;</span><br><span class="line">&lt;/body&gt;</span><br><span class="line">&lt;/html&gt;</span><br></pre></td></tr></table></figure>
+<p>在调试的时候,为了关联St2的源码,需要在IDEA中配置maven.</p>
+<h2 id="0x01-POC"><a href="#0x01-POC" class="headerlink" title="0x01 POC"></a>0x01 POC</h2><p>在username输入:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">%&#123;<span class="meta">@java</span>.lang.Runtime<span class="meta">@getRuntime</span>().exec(<span class="string">"calc"</span>)&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="0x02-分析"><a href="#0x02-分析" class="headerlink" title="0x02 分析"></a>0x02 分析</h2><p>先简单看下Struts2的执行流程:</p>
+<p><img src="/2018/04/08/S2-001调试分析/1.jpg" alt=""></p>
+<p>St2的执行流程分为2条主线:</p>
+<ol>
+<li><p>初始化阶段.只在web应用启动初执行一次,进行相关初始化.</p>
+</li>
+<li><p>Struts2处理http请求.这里又可以分为两个阶段</p>
+<ol>
+<li><p>St2对请求进行预处理,这个阶段主要是St2和web容器打交道,把http请求封装成java对象.为真正的业务逻辑执行做必要的数据环境和运行环境的准备</p>
+<ol start="2">
+<li>程序执行的控制权交给XWork,执行具体的业务逻辑.</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p>通过以前对拦截器的学习,我们已经拦截器可以在调用action之前提供预处理逻辑.</p>
+<p>其中,params拦截器用于设置action上的请求参数,它是默认被调用的.为了便于分析漏洞,我在struts.xml里手动写了出来,目的是为了在params拦截器处设置断点.</p>
+<p><img src="/2018/04/08/S2-001调试分析/2.jpg" alt=""></p>
+<p>在IDEA内点击进入<code>params</code>,</p>
+<p><img src="/2018/04/08/S2-001调试分析/3.jpg" alt=""></p>
+<p>继续进入<code>ParametersInterceptor</code>,</p>
+<p><img src="/2018/04/08/S2-001调试分析/4.jpg" alt=""></p>
+<p>这里把传入的参数打入到值栈中,我们从这里下断开始调试.</p>
+<p>com.opensymphony.xwork2.interceptor.ParametersInterceptor:159,</p>
+<p><img src="/2018/04/08/S2-001调试分析/5.jpg" alt=""></p>
+<p>执行到167行,</p>
+<p><img src="/2018/04/08/S2-001调试分析/6.jpg" alt=""></p>
+<p>步入invocation.invoke(),</p>
+<p><img src="/2018/04/08/S2-001调试分析/7.jpg" alt=""></p>
+<p>步入executeResult(),执行到com.opensymphony.xwork2.DefaultActionInvocation:348,</p>
+<p><img src="/2018/04/08/S2-001调试分析/8.jpg" alt=""></p>
+<p>步入dispatcher.forward(),这里继续步入IDEA会显示不出来源码.</p>
+<p>请教了@chybeta之后,解决的办法是多次步入,直到进入org.apache.struts2.views.jsp.ComponentTagSupport:48,</p>
+<p><img src="/2018/04/08/S2-001调试分析/9.jpg" alt=""></p>
+<p>从这里开始解析jsp页面内的标签了.首先是外层的form标签,这层可以直接跳出,直到解析userName,因为我们的payload在这里输入的.</p>
+<p><img src="/2018/04/08/S2-001调试分析/10.jpg" alt=""></p>
+<p>继续步入,执行到org.apache.struts2.views.jsp.ComponentTagSupport:49,</p>
+<p><img src="/2018/04/08/S2-001调试分析/11.jpg" alt=""></p>
+<p>首先解析开始标签,处理完之后,又回到index.jsp,</p>
+<p><img src="/2018/04/08/S2-001调试分析/12.jpg" alt=""></p>
+<p>再次步入,执行到org.apache.struts2.views.jsp.ComponentTagSupport:43,</p>
+<p><img src="/2018/04/08/S2-001调试分析/13.jpg" alt=""></p>
+<p>doEndTag()解析结束标签,继续步入compoent.end(),</p>
+<p>执行到org.apache.struts2.components.UIBean:481,</p>
+<p><img src="/2018/04/08/S2-001调试分析/14.jpg" alt=""></p>
+<p>步入evaluateParams(),</p>
+<p>不难发现,这个方法的作用是获取标签的各项属性值,我们在index.jsp里只设置了两项属性.</p>
+<p>name和label,</p>
+<p><img src="/2018/04/08/S2-001调试分析/15.jpg" alt=""></p>
+<p>继续执行到altSyntax(),这个方法返回true,根据<a href="https://cwiki.apache.org/confluence/display/WW/Alt+Syntax" target="_blank" rel="noopener">官方文档</a>,altSyntax默认开启,为了动态的改变标签属性的值,它允许执行标签属性中的OGNL表达式.</p>
+<p>同时,为了不过多的引入单引号,可以使用”%{…}”的形式来写入表达式.</p>
+<p><img src="/2018/04/08/S2-001调试分析/16.png" alt=""></p>
+<p><img src="/2018/04/08/S2-001调试分析/17.jpg" alt=""></p>
+<p>此时,expr值为<code>%{userName}</code></p>
+<p><img src="/2018/04/08/S2-001调试分析/18.jpg" alt=""></p>
+<p>步入findValu(),执行到org.apache.struts2.components.Component:313,</p>
+<p><img src="/2018/04/08/S2-001调试分析/19.jpg" alt=""></p>
+<p>步入TextParseUtil.translateVariables(),执行到com.opensymphony.xwork2.util.TextParseUtil:71,</p>
+<p><img src="/2018/04/08/S2-001调试分析/20.jpg" alt=""></p>
+<p>步入translateVariables(),执行到com.opensymphony.xwork2.util.TextParseUtil,</p>
+<p>这个方法很重要,里面是一个while循环,</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> Object <span class="title">translateVariables</span><span class="params">(<span class="keyword">char</span> open, String expression, ValueStack stack, Class asType, ParsedValueEvaluator evaluator)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// deal with the "pure" expressions first!</span></span><br><span class="line">    <span class="comment">//expression = expression.trim();</span></span><br><span class="line">    Object result = expression;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</span><br><span class="line">        <span class="keyword">int</span> start = expression.indexOf(open + <span class="string">"&#123;"</span>);</span><br><span class="line">        <span class="keyword">int</span> length = expression.length();</span><br><span class="line">        <span class="keyword">int</span> x = start + <span class="number">2</span>;</span><br><span class="line">        <span class="keyword">int</span> end;</span><br><span class="line">        <span class="keyword">char</span> c;</span><br><span class="line">        <span class="keyword">int</span> count = <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">while</span> (start != -<span class="number">1</span> &amp;&amp; x &lt; length &amp;&amp; count != <span class="number">0</span>) &#123;</span><br><span class="line">            c = expression.charAt(x++);</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">'&#123;'</span>) &#123;</span><br><span class="line">                count++;</span><br><span class="line">            &#125; <span class="keyword">else</span> <span class="keyword">if</span> (c == <span class="string">'&#125;'</span>) &#123;</span><br><span class="line">                count--;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        end = x - <span class="number">1</span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> ((start != -<span class="number">1</span>) &amp;&amp; (end != -<span class="number">1</span>) &amp;&amp; (count == <span class="number">0</span>)) &#123;</span><br><span class="line">            String var = expression.substring(start + <span class="number">2</span>, end);</span><br><span class="line"></span><br><span class="line">            Object o = stack.findValue(var, asType);</span><br><span class="line">            <span class="keyword">if</span> (evaluator != <span class="keyword">null</span>) &#123;</span><br><span class="line">               o = evaluator.evaluate(o);</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line"></span><br><span class="line">            String left = expression.substring(<span class="number">0</span>, start);</span><br><span class="line">            String right = expression.substring(end + <span class="number">1</span>);</span><br><span class="line">            <span class="keyword">if</span> (o != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">if</span> (TextUtils.stringSet(left)) &#123;</span><br><span class="line">                    result = left + o;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    result = o;</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                <span class="keyword">if</span> (TextUtils.stringSet(right)) &#123;</span><br><span class="line">                    result = result + right;</span><br><span class="line">                &#125;</span><br><span class="line"></span><br><span class="line">                expression = left + o + right;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">// the variable doesn't exist, so don't display anything</span></span><br><span class="line">                result = left + right;</span><br><span class="line">                expression = left + right;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> XWorkConverter.getInstance().convertValue(stack.getContext(), result, asType);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><img src="/2018/04/08/S2-001调试分析/21.jpg" alt=""></p>
+<p>跟如stack.findValue(),</p>
+<p><img src="/2018/04/08/S2-001调试分析/21.jpg" alt=""></p>
+<p>来到com.opensymphony.xwork2.util.OgnlValueStack,</p>
+<p><img src="/2018/04/08/S2-001调试分析/22.jpg" alt=""></p>
+<p>通过getValue()执行了OGNL表达式,获取了userName的值,也就是我们输入的payload.</p>
+<p><img src="/2018/04/08/S2-001调试分析/23.jpg" alt=""></p>
+<p>然后赋值给了o,再赋值给result,最终赋值给了expression.</p>
+<p>因为是在while循环里面,所以继续从expression中提取OGNL并执行.</p>
+<p><img src="/2018/04/08/S2-001调试分析/24.jpg" alt=""></p>
+<p>所以漏洞就在这里产生了,因为他会递归解析我们的输入,所以只要输入<code>%{OGNL}</code>,那么里面的OGNL就会被提取出来,再传入getValue()执行.</p>
+<h2 id="0x03-修复"><a href="#0x03-修复" class="headerlink" title="0x03 修复"></a>0x03 修复</h2><p>在XWork 2.0.4中,取消了对OGNL的递归解析.</p>
+<p><img src="/2018/04/08/S2-001调试分析/25.jpg" alt=""></p>
+<h2 id="0x04-总结"><a href="#0x04-总结" class="headerlink" title="0x04 总结"></a>0x04 总结</h2><p>第一次分析St2,难度还是不大,这次主要是看别人的文章,依葫芦画瓢,主要是为了熟悉调试技巧.</p>
+<p>这个洞简单来说就是St2对参数值进行了迭代解析,引发OGNL表达式注入,最终导致命令执行.原理还是很简单.</p>
+<h2 id="0x05-参考"><a href="#0x05-参考" class="headerlink" title="0x05 参考"></a>0x05 参考</h2><p><a href="https://xz.aliyun.com/t/2044" target="_blank" rel="noopener">https://xz.aliyun.com/t/2044</a></p>
+<p><a href="http://sh3ll.me/archives/201703152213.txt" target="_blank" rel="noopener">http://sh3ll.me/archives/201703152213.txt</a></p>
+<p><a href="https://cwiki.apache.org/confluence/display/WW/S2-001" target="_blank" rel="noopener">https://cwiki.apache.org/confluence/display/WW/S2-001</a></p>
+
+  </div>
+  <div class="post-footer">
+    
+      <ul class="post-tag-list"><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/漏洞分析/">漏洞分析</a></li></ul>
+    
+
+    <a href="#top" class="top">Back to Top</a>
+  </div>
+</article>
+<footer>
+  &copy; 2018
+  <span class="author">
+    sn00py
+  </span>
+</footer>
+    </div>
+  </body>
+</html>

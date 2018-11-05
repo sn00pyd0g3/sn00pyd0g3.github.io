@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+  <!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge,chrome=1">
+  
+  <title>OAuth回调参数漏洞案例解析 - sn00py</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+  
+  <meta name="keywords" content=漏洞挖掘>
+  
+  
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=1.02">
+  
+  
+    <link rel="alternate" href="/atom.xml " title="sn00py" type="application/atom+xml">
+  
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+  <body>
+    <div class="container">
+      <header class="header">
+  <div class="blog-title">
+    <a href="/" class="logo">sn00py</a>
+    <div class="subtitle"></div>
+  </div>
+  <nav class="navbar">
+    <ul class="menu">
+      
+        <li class="menu-item">
+          <a href="/" class="menu-item-link">Home</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/archives" class="menu-item-link">Archives</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/about" class="menu-item-link">About</a>
+        </li>
+      
+        <li class="menu-item">
+          <a href="/friends/" class="menu-item-link">Frinds</a>
+        </li>
+      
+    </ul>
+  </nav>
+</header>
+<article class="post">
+  <div class="post-title">
+    <h1 class="article-title">OAuth回调参数漏洞案例解析</h1>
+  </div>
+   <div class="post-meta">
+    <span class="post-time">2018-04-01</span>
+  </div>
+  <div class="post-content">
+    <h2 id="0x00-引言"><a href="#0x00-引言" class="headerlink" title="0x00 引言"></a>0x00 引言</h2><p><strong>开放授权</strong>(OAuth)是一个开放标准,允许用户让第三方应用访问该用户在某一网站上存储的私密的资源(如照片,视频,联系人列表),而无需将用户名和密码提供给第三方应用.目前广泛使用的版本是OAuth 2.0.</p>
+<p>本文就笔者在国内一些SRC发现的一类OAuth使用不正确导致的登陆劫持漏洞,予以总结和分析,以及给出相关的安全建议.</p>
+<h2 id="0x01-OAuth认证原理"><a href="#0x01-OAuth认证原理" class="headerlink" title="0x01 OAuth认证原理"></a>0x01 OAuth认证原理</h2><p>OAuth 2.0中有6种常用的授权类型:</p>
+<ul>
+<li>Authorization Code</li>
+<li>Implicit</li>
+<li>Password</li>
+<li>Client Credentials</li>
+<li>Device Code</li>
+<li>Refresh Token</li>
+</ul>
+<p>限于篇幅和个人水平,本文只介绍其中的Authorization Code(授权码模式),这也是目前国内大部分厂商使用的模式.</p>
+<p>你可能之前并没听过OAuth这个词,但一定已经使用过它了.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/01.jpg" alt=""></p>
+<p>例如新浪微博这里就提供了多种第三方登陆,下面笔者以”用QQ号登陆新浪微博”这个实例来讲解OAuth认证的原理.</p>
+<p>我们把”微博”称作客户端,”QQ”称作服务端.</p>
+<p>点击QQ登陆的图标,用户将被导向服务端的认证服务器,</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/02.jpg" alt=""></p>
+<p>用户在此选择是否给予客户端(微博)授权,如果授权,则客户端将会获得用户在服务端(QQ)的昵称,头像和性别资料.</p>
+<p>先来看下这个URL,</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://graph.qq.com/oauth2.0/show?which=Login&amp;display=pc&amp;client_id=101019034&amp;response_type=code&amp;scope=get_info,get_user_info&amp;redirect_uri=https://passport.weibo.com/othersitebind/bind?site=qq&amp;state=CODE-gz-1F2ukL-448SQs-VFeXcvwk6Y0I4DO43f41e&amp;bentry=miniblog&amp;wl=&amp;display=</span><br></pre></td></tr></table></figure>
+<p>这其中有重要意义的参数有以下几个:</p>
+<ul>
+<li><p>client_id</p>
+<p>客户端标识,这个参数是和客户端一一对应的,这样服务端才知道认证请求来自哪个客户端.例如”101019034”代表的就是新浪微博这个客户端</p>
+</li>
+<li><p>response_type</p>
+<p>授权类型,上文已经说了OAuth有多种授权类型.此处”code”代表使用的是Authorization Code(授权码模式)</p>
+</li>
+<li><p>scope</p>
+<p>申请的权限范围</p>
+</li>
+<li><p>redirect_uri</p>
+<p>重定向URI,用户给予授权后,将会<strong>携带授权码跳转到此地址</strong></p>
+</li>
+<li><p>state</p>
+<p>这个参数是用来防御CSRF的,你可以将其理解为我们常用的”token”.这里它的使用和”token”也是一样的.</p>
+<p>每次授权请求,客户端都会生成一个state,并将其保存到cookie或session中.授权成功后,服务端原样返回state,客户端将其与cookie或session中的值进行比对.</p>
+</li>
+</ul>
+<p>回到授权过程,如果用户点击了QQ头像确认授权,</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/03.jpg" alt=""></p>
+<p>认证服务器确认用户身份后,会生成一个授权码(code),然后将用户导向之前redirect_uri指定的地址,并附带上授权码(code)和state.</p>
+<p>state的作用已经说过是防御CSRF的,最终要的就是这个code了.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/04.jpg" alt=""></p>
+<p>客户端收到授权码(code)后,将其发送到服务端比对(这一步在客户端后台服务器完成,对用户不可见).</p>
+<p>如果比对结果一致,那么游戏结束.</p>
+<p>在这个请求中,比对结束后,生成了一个alt,并跳转到了login.sina.com.cn域,</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/05.jpg" alt=""></p>
+<p>验证了alt后,就在.sina.com.cn域种上cookie了.</p>
+<p>从这个登陆案例来看,只要攻击者拿到了code参数,那么就能劫持用户的微博账号.</p>
+<p>有经验的攻击者一定发现了,既然code参数会发送到redirect_uri参数指定的地址,那么只要让redirect_uri跳转到我们指定的地址,那么就能窃取code.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/06.jpg" alt=""></p>
+<p>看起来,redirect_uri并不能任意指定.</p>
+<p>但我们仍有办法窃取到code,请看下面的几个案例.</p>
+<h2 id="0x02-关于回调参数的几个案例"><a href="#0x02-关于回调参数的几个案例" class="headerlink" title="0x02 关于回调参数的几个案例"></a>0x02 关于回调参数的几个案例</h2><h3 id="案例1-新浪微博登陆劫持"><a href="#案例1-新浪微博登陆劫持" class="headerlink" title="案例1 新浪微博登陆劫持"></a>案例1 新浪微博登陆劫持</h3><blockquote>
+<p> redirect_uri限制不严格,可跳转到任意子域</p>
+</blockquote>
+<p>虽然redirect_uri不能任意指定,但是微博的业务设定为了可以跳转到任意weibo.com的子域下.</p>
+<p>如果我们能在某个子域下的某个页面引入外部资源(img,vedio的href属性;script标签的src属性),再让redirect_uri携带code跳转到这个页面,那么我们就能从referer头里窃取到code.</p>
+<p>你可能首先会想到XSS,但是现在XSS不是那么好找了,而且用在这里有点大材小用.其实只要我们能引入一个外部图片就行了.</p>
+<p>这种功能很常见,很多地方都允许插入在线图片.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/07.jpg" alt=""></p>
+<p>我在xxx.weibo.com域下的一个帖子里插入了一个在线图片,图片地址填ceye平台地址.</p>
+<p>然后修改redirect_uri为该帖子的地址.</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://graph.qq.com/oauth2.0/show?which=Login&amp;display=pc&amp;client_id=101019034&amp;response_type=code&amp;scope=get_info%2Cget_user_info&amp;redirect_uri=http%3A%2F%2Fxxx.weibo.com%2Fxxx%2Fxxx%3fothersitebind%2Fbind%3Fsite%3Dqq%26state%3DCODE-gz-1EDEl3-2aubzX-fMrFwdihkKMytGcd5eddc%26bentry%3Dminiblog%26wl%3D&amp;display=</span><br></pre></td></tr></table></figure>
+<p>然后把这个链接发给受害者,一旦他点击头像确认登陆,携带code的请求就会被导向到攻击者引入了外部图片的页面.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/08.jpg" alt=""></p>
+<p>页面加载了img标签后,code就会通过referer头泄露出去.</p>
+<p>上文已经说过,只要攻击者拿到code,那么发送给passport.weibo.com进行认证,就能劫持用户的微博账号了.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/09.jpg" alt=""></p>
+<h3 id="案例2-某厂登陆劫持"><a href="#案例2-某厂登陆劫持" class="headerlink" title="案例2  某厂登陆劫持"></a>案例2  某厂登陆劫持</h3><blockquote>
+<p>redirect_uri严格限制,但目标域不安全</p>
+</blockquote>
+<p>看了案例1,你可能会觉得应该由xxx.weibo.com背锅,如果严格限制redirect_uri跳转到指定域,就不会由问题了.</p>
+<p>这是在一次众测遇到的一个案例,貌似还没修复,就不说名字了.</p>
+<p>该厂允许绑定淘宝账号进行第三方登陆,</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://oauth.taobao.com/authorize?client_id=xxx&amp;response_type=code&amp;redirect_uri=http://a.xxx.com/login</span><br></pre></td></tr></table></figure>
+<p>并且严格限制了只能跳转到a.xxx.com域下,所以上面那种随便找个子域插入图片的套路看来是不行了.</p>
+<p>但不幸的是,我正巧的a.xxx.com域下找到一个XSS,</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/10.jpg" alt=""></p>
+<p>所以,我们能更方便的写入img或者scritp标签了,后面窃取code的方法和上面一样,就不多说了.</p>
+<h3 id="案例3-360-OAuth服务端漏洞"><a href="#案例3-360-OAuth服务端漏洞" class="headerlink" title="案例3  360 OAuth服务端漏洞"></a>案例3  360 OAuth服务端漏洞</h3><blockquote>
+<p>攻击OAuth服务端,一锅端</p>
+</blockquote>
+<p>通过上面2个案例,我们可以得出这样的结论:</p>
+<p>不仅要严格限制redirect_uri跳转的域,而且要保证其跳转到一个安全的域.</p>
+<p>但是,人在广东已经….啊不对,人在家中坐,锅从天上来.</p>
+<p>360作为服务端为其它厂商提供了OAuth认证的功能,开发者可以在360应用开发平台进行申请.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/11.jpg" alt=""></p>
+<p>人家不仅提供了详细的开发文档,还给开发者弄了个调试工具.</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/12.jpg" alt=""></p>
+<p>理论上呢,redirect_uri是开发者自己填的,为了安全,只能是某个安全的域名.</p>
+<p>但是,360为了便于开发者进行登陆调试,把”openapi.360.cn”这个域名设置成了所有应用的合法回调地址.</p>
+<p>那么openapi.360.cn这个域的安全性直接影响到所有客户端.</p>
+<p>不幸的是,我又在openapi.360.cn下找到一个XSS,</p>
+<p><img src="/2018/04/01/OAuth回调参数漏洞案例解析/13.jpg" alt=""></p>
+<p>所以,又能快乐的窃取到code了,并且影响了所有使用360账号登陆的应用.</p>
+<h2 id="0x03-总结"><a href="#0x03-总结" class="headerlink" title="0x03 总结"></a>0x03 总结</h2><p>关于OAuth认证,还有其它的授权类型以及各种漏洞有待探索.</p>
+<p>对于本文提及的授权码模式,其中的redirect_uri参数应该有以下递进式的限制:</p>
+<ol>
+<li>跳转到专门的认证服务器域名</li>
+<li>跳转到该域名下某个确定的页面</li>
+<li>确保该页面是安全的(无法引入外部资源)</li>
+</ol>
+<h2 id="0x04-参考"><a href="#0x04-参考" class="headerlink" title="0x04 参考"></a>0x04 参考</h2><p><a href="https://oauth.net/2/" target="_blank" rel="noopener">https://oauth.net/2/</a></p>
+<p><a href="https://tools.ietf.org/html/rfc6819" target="_blank" rel="noopener">https://tools.ietf.org/html/rfc6819</a></p>
+
+  </div>
+  <div class="post-footer">
+    
+      <ul class="post-tag-list"><li class="post-tag-list-item"><a class="post-tag-list-link" href="/tags/漏洞挖掘/">漏洞挖掘</a></li></ul>
+    
+
+    <a href="#top" class="top">Back to Top</a>
+  </div>
+</article>
+<footer>
+  &copy; 2018
+  <span class="author">
+    sn00py
+  </span>
+</footer>
+    </div>
+  </body>
+</html>
